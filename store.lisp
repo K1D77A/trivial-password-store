@@ -78,7 +78,7 @@
 
 (defun make-database (location name)
   (check-type location (or string pathname))
-  (check-type name keyword)
+  (check-type name string)
   (make-instance 'database :name name :location location))
 
 (defparameter *database* (make-database "./db.txt" :db))
@@ -129,19 +129,18 @@
                                     pass-entry))
        database))))
 
-
-(defun make-database (name)
-  (make-instance 'database :name name))
-
 (defun new-entry (db group entry-name to-encrypt pass)
   (add-pass-entry-to-database (make-pass-entry entry-name to-encrypt pass) group db))
 
 (defmethod display-db (db)
   (print-object db t))
+
 (defun get-group (database group)
   (find group (list-of-groups database) :key #'name :test #'string=))
+
 (defun get-group-names (database)
   (mapcar #'name (list-of-groups database)))
+
 (defun get-name-in-group (database group name)
   (let ((gro (get-group database group)))
     (find name (list-of-entries gro) :key #'name :test #'string=)))
@@ -151,9 +150,6 @@
     (remove NIL (mapcar (lambda (group)
                           (get-name-in-group database group name))
                         groups))))
-
-
-
 
 (defmethod to-list ((ent encrypted-pass-entry))
   (append (list :entry-name (name ent))
