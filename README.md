@@ -2,7 +2,7 @@
 This is just a trivial password storing facility that stores passwords using threefish1024 with a 128byte IV into a text file which is also encrypted with another pass. This was a challenge from the Web Dev 2.0 Discord server, its not meant to be a serious project
 I threw it together to get it done but it seems to work pretty well. 
 
-Just a heads up this doesn't salt the pass, so whenever 'pass' is expected you should probably salt it. 
+Just a heads up this doesn't salt the pass, so whenever 'pass' is expected you should probably salt it, however they are hashed with SHA512. 
 
 The main functions are:
 
