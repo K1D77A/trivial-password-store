@@ -81,7 +81,7 @@
   (check-type name string)
   (make-instance 'database :name name :location location))
 
-(defparameter *database* (make-database "./db.txt" :db))
+(defparameter *database* (make-database "./db.txt" "db"))
 
 (defun make-pass-entry (name to-encrypt pass)
   (check-type name string)
@@ -220,18 +220,15 @@
     (format t "done (maybe)~%")))
 
 (defun len-file (file)
-  (let ((n 0))
-    (with-open-file (s file :element-type '(unsigned-byte 8) :if-does-not-exist nil)
-      (loop :for line := (read-byte s nil)
-            :while line :do (incf n)))
-    n))
-            
+  (with-open-file (s file :element-type '(unsigned-byte 8) :if-does-not-exist nil)
+    (file-length s)))
+
 (defun db-file-to-list (file password)
   (let* ((len (len-file file))
          (cipher (gen-cipher password))
          (res (make-array len :element-type '(unsigned-byte 8))))
     (with-open-file (s file :element-type '(unsigned-byte 8))
-      (read-sequence res s))
+      (read-sequence res s :end ))
     (jonathan:parse (arr-to-str (decrypt-byte-array cipher res)))))
 
 (defun load-db (file password)
