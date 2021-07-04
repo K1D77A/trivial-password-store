@@ -73,7 +73,7 @@
   (ironclad:ascii-string-to-byte-array str))
 
 (defun arr-to-str (str)
-  (babel:octets-to-string str))
+  (map 'string #'code-char str))
 
 (defun make-database (location name)
   (check-type location (or string pathname))

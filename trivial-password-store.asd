@@ -5,8 +5,7 @@
   :version "1.0.0"
   :serial t
   :depends-on (#:jonathan
-               #:ironclad
-               #:babel)
+               #:ironclad)
   :components ((:file "package")
                (:file "store")))
 
