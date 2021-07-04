@@ -24,6 +24,7 @@
              (db obj)
              (pass obj)))))
 
+;;this is here but idk how to actually use it, a bad password just looks bad...
 (define-condition bad-entry-password (bad-password)
   ((entry
     :accessor entry
