@@ -5,5 +5,6 @@
            #:new-entry
            #:decrypt-pass-entry
            #:database-to-file
-           #:load-db
+           #:load-database
+           #:decrypt
            #:get-pass-entry/ies))

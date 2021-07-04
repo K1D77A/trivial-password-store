@@ -1,5 +1,54 @@
 (in-package #:trivial-password-store)
 
+(define-condition trivial-password-store ()
+  ())
+
+(define-condition bad-password (trivial-password-store)
+  ((pass
+    :accessor pass
+    :initarg :pass
+    :type (or null string)
+    :documentation "the pass you entered"))
+  (:documentation "Signalled when a password is wrong"))
+
+(define-condition bad-db-password (bad-password)
+  ((db 
+    :accessor db
+    :initarg :db 
+    :type (or string filename)
+    :documentation "the db you tried to open"))
+  (:documentation "Signalled when the db password is wrong.")
+  (:report
+   (lambda (obj stream)
+     (format stream "Password for DB ~A is wrong. Pass: ~A."
+             (db obj)
+             (pass obj)))))
+
+(define-condition bad-entry-password (bad-password)
+  ((entry
+    :accessor entry
+    :initarg :entry 
+    :type (or string filename)
+    :documentation "the entry you tried to open"))
+  (:documentation "Signalled when the entry password is wrong.")
+  (:report
+   (lambda (obj stream)
+     (format stream "Password for ENTRY ~A is wrong. Pass: ~A."
+             (entry obj)
+             (pass obj)))))
+
+(define-condition missing-db (trivial-password-store)
+  ((db 
+    :accessor db
+    :initarg :db 
+    :type (or string filename)
+    :documentation "the db you tried to open"))
+  (:documentation "Signalled when the db you tried to open is missing.")
+  (:report
+   (lambda (obj stream)
+     (format stream "The DB ~A you tried to open is missing."
+             (db obj)))))
+
 (defun hash-password (password digest)
   "Takes in a string and a keyword, the keyword is digest supported by ironclad"
   (ironclad:byte-array-to-hex-string 
@@ -22,10 +71,14 @@
 
 (defmethod print-object ((object database) stream)
   (print-unreadable-object (object stream)
-    (format stream "Location ~A~%Name ~A~%Groups: ~A~%"
+    (format stream "Location ~A~%Name ~A~%Groups: ~{~A~^, ~}~%"
             (location object)
             (name object)
-            (list-of-groups object))))
+            (if (list-of-groups object)
+                (mapcar (lambda (group)
+                          (format nil "~A (~D entries)" (name group)
+                                  (length (list-of-entries group))))
+                        (list-of-groups object))))))
 
 (defclass group ()
   ((%name
@@ -95,7 +148,9 @@
 
 (defmethod decrypt-pass-entry ((pass string) (pass-entry encrypted-pass-entry))
   (let*((cipher (gen-cipher pass))
-        (pass (decrypt-byte-array cipher (encrypted-pass pass-entry))))
+        (copy (copy-seq (encrypted-pass pass-entry)))
+        (pass (decrypt-byte-array cipher (encrypted-pass pass-entry))));destructive
+    (setf (encrypted-pass pass-entry) copy)
     (make-instance 'decrypted-pass-entry :name (name pass-entry)
                                          :decrypted-pass (arr-to-str pass))))
 
@@ -145,10 +200,16 @@
   (let ((gro (get-group database group)))
     (find name (list-of-entries gro) :key #'name :test #'string=)))
 
-(defun get-pass-entry/ies (database name)
-  (let ((groups (get-group-names database)))
+(defmethod get-entry ((group group) name)
+  (let ((res (find name (list-of-entries group) :key #'name :test #'string=)))
+    (if res
+        (list res)
+        res)))
+
+(defmethod get-entry ((database database) name)
+  (let ((groups (list-of-groups database)))
     (remove NIL (mapcar (lambda (group)
-                          (get-name-in-group database group name))
+                          (first (get-entry group name)))
                         groups))))
 
 (defmethod to-list ((ent encrypted-pass-entry))
@@ -166,15 +227,15 @@
 
 ;;;convert from list to encrypted-pass-entry
 (defun pass-as-list-p (list)
-  (and (string= (first list) :encrypted-pass)
-       (string= (third list) :entry-name)))
+  (and (string= (third list) :entry-name)
+       (string= (first list) :encrypted-pass)))
 
 (deftype pass-list () `(satisfies pass-as-list-p))
 
 (defun pass-from-list (list)
   (check-type list pass-list)
   (make-instance 'encrypted-pass-entry
-                 :name (second list)
+                 :name (fourth list)
                  :encrypted-pass (make-array (length (second list))
                                              :element-type '(unsigned-byte 8)
                                              :initial-contents (second list))))
@@ -202,22 +263,23 @@
                            :name (fourth list)
                            :list-of-groups (mapcar #'group-from-list (nthcdr 4 list))))
 
-
 (defmethod to-text ((ent database))
   (jonathan:to-json (to-list ent)))
 
-(defun database-to-file (database password)
+(defun database-to-file (database password &optional (quiet nil))
   (let* ((location (location database))
          (cipher (gen-cipher password))
          (text (encrypt-byte-array cipher (str-to-octets (to-text database)))))
-    (format t "saving to location: ~A~%" location)
+    (unless quiet
+      (format t "saving to location: ~A~%" location))
     (with-open-file (s location :if-exists :supersede
                                 :if-does-not-exist :create
                                 :element-type '(unsigned-byte 8)
                                 :direction :output)
       (write-sequence text s)
       (force-output s))
-    (format t "done (maybe)~%")))
+    (unless quiet
+      (format t "done (maybe)~%"))))
 
 (defun len-file (file)
   (with-open-file (s file :element-type '(unsigned-byte 8) :if-does-not-exist nil)
@@ -231,11 +293,16 @@
       (read-sequence res s))
     (jonathan:parse (arr-to-str (decrypt-byte-array cipher res)))))
 
-(defun load-db (file password)
+(defun load-database (file password)
+  "Loads the database from FILE using PASSWORD to decrypt the top level database.
+If FILE is missing then signals 'missing-db. If PASSWORD is bad then signals 
+'bad-db-password."
   (check-type file (or pathname string))
+  (unless (uiop:file-exists-p file)
+    (error 'missing-db :db file))
   (handler-case (database-from-list (db-file-to-list file password))
     (jonathan.error:<jonathan-incomplete-json-error> ()
-      "bad password")))
+      (error 'bad-db-password :db file :pass password))))
 
 ;;;;all below pertains to encryption
 (defvar *prng* (ironclad:make-prng :fortuna))
