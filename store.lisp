@@ -1,5 +1,4 @@
-(ql:quickload :ironclad)
-(ql:quickload :jonathan)
+(in-package #:trivial-password-store)
 
 (defun hash-password (password digest)
   "Takes in a string and a keyword, the keyword is digest supported by ironclad"
@@ -258,13 +257,7 @@
 (defun conc-arrs (arrs)
   "concatenate all the arrays within the list arrs and return 1 new array"
   ;;(declare (optimize (speed 3)(safety 1)))
-  (let ((array (make-array (seq-total-len arrs) :element-type '(unsigned-byte 8)))
-        (pos 0))    
-    (loop :for arr :in (the list arrs)
-          :do (loop :for ele :across  arr
-                    :do (setf (aref array pos) ele)
-                        (incf pos)))
-    array))
+  (apply #'concatenate 'vector arrs))
 
 (defun encrypt-byte-array (cipher byte-array)
   "Takes in a cipher and a byte array and returns a new byte array whose contents has 
