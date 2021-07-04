@@ -201,6 +201,9 @@
   (let ((gro (get-group database group)))
     (find name (list-of-entries gro) :key #'name :test #'string=)))
 
+(defgeneric get-entry (obj name)
+  (:documentation "Attempts to find entry within OBJECT. Always returns a cons."))
+
 (defmethod get-entry ((group group) name)
   (let ((res (find name (list-of-entries group) :key #'name :test #'string=)))
     (if res
@@ -212,6 +215,9 @@
     (remove NIL (mapcar (lambda (group)
                           (first (get-entry group name)))
                         groups))))
+
+(defgeneric to-list (entry)
+  (:documentation "Converts ENTRY into a list."))
 
 (defmethod to-list ((ent encrypted-pass-entry))
   (append (list :entry-name (name ent))
@@ -268,6 +274,9 @@
   (jonathan:to-json (to-list ent)))
 
 (defun database-to-file (database password &optional (quiet nil))
+  "Takes a DATABASE object and a PASSWORD which is a string, converts the entire db to a 
+nice list and then encrypts it using PASSWORD and saves it into (location DATABASE). 
+if QUIET is non nil then prints."
   (let* ((location (location database))
          (cipher (gen-cipher password))
          (text (encrypt-byte-array cipher (str-to-octets (to-text database)))))
