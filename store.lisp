@@ -166,40 +166,40 @@
 
 ;;;convert from list to encrypted-pass-entry
 (defun pass-as-list-p (list)
-  (and (eq (first list) :encrypted-pass)
-       (eq (third list) :entry-name)))
+  (and (string= (first list) :encrypted-pass)
+       (string= (third list) :entry-name)))
 
 (deftype pass-list () `(satisfies pass-as-list-p))
 
 (defun pass-from-list (list)
   (check-type list pass-list)
   (make-instance 'encrypted-pass-entry
-                 :name (getf list :entry-name)
+                 :name (second list)
                  :encrypted-pass (make-array (length (second list))
                                              :element-type '(unsigned-byte 8)
                                              :initial-contents (second list))))
 ;;;convert from list to group
 (defun group-as-list-p (list)
-  (and (eq (first list) :GROUP-NAME)
+  (and (string= (first list) :GROUP-NAME)
        (listp (third list))))
 
 (deftype group-list () `(satisfies group-as-list-p))
 
 (defun group-from-list (list)
   (check-type list group-list)
-  (make-instance 'group :name (getf list :group-name)
+  (make-instance 'group :name (second list)
                         :list-of-entries (mapcar #'pass-from-list (nthcdr 2 list))))
 ;;;convert the database from a list to objects
 (defun database-as-list-p (list)
-  (and (eq (first list) :LOCATION)
-       (eq (third list) :DATABASE-NAME)))
+  (and (string= (first list) :LOCATION)
+       (string= (third list) :DATABASE-NAME)))
 
 (deftype database-list () `(satisfies database-as-list-p))
 
 (defun database-from-list (list)
   (check-type list database-list)
-  (make-instance 'database :location (getf list :location)
-                           :name (getf list :database-name)
+  (make-instance 'database :location (second list)
+                           :name (fourth list)
                            :list-of-groups (mapcar #'group-from-list (nthcdr 4 list))))
 
 
@@ -232,6 +232,7 @@
     (jonathan:parse (arr-to-str (decrypt-byte-array cipher res)))))
 
 (defun load-db (file password)
+  (check-type file (or pathname string))
   (handler-case (database-from-list (db-file-to-list file password))
     (jonathan.error:<jonathan-incomplete-json-error> ()
       "bad password")))
