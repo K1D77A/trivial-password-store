@@ -7,4 +7,5 @@
            #:database-to-file
            #:load-database
            #:decrypt
+           #:get-entry
            #:get-pass-entry/ies))

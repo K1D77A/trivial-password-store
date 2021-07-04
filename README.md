@@ -11,7 +11,7 @@ The main functions are:
 
 `(new-entry db group entry-name to-encrypt pass)` which adds a new encrypted password into the DB within GROUP and named by ENTRY-NAME. PASS is used to encrypt TO-ENCRYPT
 
-`(decrypt-pass-entry pass pass-entry)` given an object of type PASS-ENTRY (created by NEW-ENTRY) attempt to decrypt using PASS.
+`(decrypt pass pass-entry)` given an object of type PASS-ENTRY (created by NEW-ENTRY) attempt to decrypt using PASS.
  
 `(database-to-file database password)` given a DATABASE encrypts the entire thing using PASSWORD and saves it to (location DATABASE)
 
@@ -112,7 +112,7 @@ Encrypted-pass: #(69 184 155 51 8 212 100 117 172 180 198 236 185 100 144 65 18
 Individual entries have their own passwords.
 
 ```lisp
-TPS> (decrypt-pass-entry "myentrypassword" (first *))
+TPS> (decrypt "myentrypassword" (first *))
 #<Name facebook
 Decrypted-pass: myfacebookpassword
 >
