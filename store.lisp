@@ -42,11 +42,13 @@
             (name object)
             (list-of-entries object))))
 
-(defclass encrypted-pass-entry ()
+(defclass pass-entry ()
   ((%name
     :accessor name
-    :initarg :name)
-   (%encrypted-pass
+    :initarg :name)))
+
+(defclass encrypted-pass-entry (pass-entry)
+  ((%encrypted-pass
     :accessor encrypted-pass
     :initarg :encrypted-pass)))
 
@@ -56,11 +58,8 @@
             (name object)
             (encrypted-pass object))))
 
-(defclass decrypted-pass-entry ()
-  ((%name
-    :accessor name
-    :initarg :name)
-   (%decrypted-pass
+(defclass decrypted-pass-entry (pass-entry)
+  ((%decrypted-pass
     :accessor decrypted-pass
     :initarg :decrypted-pass)))
 
@@ -72,15 +71,16 @@
 
 (defun str-to-octets (str)
   (ironclad:ascii-string-to-byte-array str))
+
 (defun arr-to-str (str)
-  (map 'string #'code-char str))
+  (babel:octets-to-string str))
 
 (defun make-database (location name)
   (check-type location (or string pathname))
   (check-type name string)
   (make-instance 'database :name name :location location))
 
-(defparameter *database* (make-database "./db.txt" "db"))
+(defvar *database* (make-database "./db.txt" "db"))
 
 (defun make-pass-entry (name to-encrypt pass)
   (check-type name string)
@@ -90,13 +90,15 @@
          (pass (encrypt-byte-array cipher (str-to-octets to-encrypt))))
     (make-instance 'encrypted-pass-entry :encrypted-pass pass :name name)))
 
-(defun decrypt-pass-entry (pass pass-entry)
-  (check-type pass-entry encrypted-pass-entry)
-  (check-type pass string)
+(defmethod decrypt ((pass string) (pass-entry encrypted-pass-entry))
+  (decrypt-pass-entry pass pass-entry))
+
+(defmethod decrypt-pass-entry ((pass string) (pass-entry encrypted-pass-entry))
   (let*((cipher (gen-cipher pass))
         (pass (decrypt-byte-array cipher (encrypted-pass pass-entry))))
     (make-instance 'decrypted-pass-entry :name (name pass-entry)
                                          :decrypted-pass (arr-to-str pass))))
+
 (defun make-group (name)
   (check-type name string)
   (make-instance 'group :name name))
@@ -113,8 +115,7 @@
       database
     (if (find (name group) entries :key #'name :test #'string=)
         database 
-        (setf entries (append entries
-                              (list group))))
+        (setf entries (append entries (list group))))
     database))
 
 (defun add-pass-entry-to-database (pass-entry group-name database)
@@ -173,32 +174,32 @@
 (defun pass-from-list (list)
   (check-type list pass-list)
   (make-instance 'encrypted-pass-entry
-                 :name (first (last list))
+                 :name (getf list :entry-name)
                  :encrypted-pass (make-array (length (second list))
                                              :element-type '(unsigned-byte 8)
                                              :initial-contents (second list))))
 ;;;convert from list to group
 (defun group-as-list-p (list)
-  (and (string= (first list) "GROUP-NAME")
+  (and (eq (first list) :GROUP-NAME)
        (listp (third list))))
 
 (deftype group-list () `(satisfies group-as-list-p))
 
 (defun group-from-list (list)
   (check-type list group-list)
-  (make-instance 'group :name (second list)
+  (make-instance 'group :name (getf list :group-name)
                         :list-of-entries (mapcar #'pass-from-list (nthcdr 2 list))))
 ;;;convert the database from a list to objects
 (defun database-as-list-p (list)
-  (and (string= (first list) "LOCATION")
-       (string= (third list) "DATABASE-NAME")))
+  (and (eq (first list) :LOCATION)
+       (eq (third list) :DATABASE-NAME)))
 
 (deftype database-list () `(satisfies database-as-list-p))
 
 (defun database-from-list (list)
   (check-type list database-list)
-  (make-instance 'database :location (second list)
-                           :name (fourth list)
+  (make-instance 'database :location (getf list :location)
+                           :name (getf list :database-name)
                            :list-of-groups (mapcar #'group-from-list (nthcdr 4 list))))
 
 
@@ -210,7 +211,7 @@
          (cipher (gen-cipher password))
          (text (encrypt-byte-array cipher (str-to-octets (to-text database)))))
     (format t "saving to location: ~A~%" location)
-    (with-open-file (s location :if-exists :overwrite
+    (with-open-file (s location :if-exists :supersede
                                 :if-does-not-exist :create
                                 :element-type '(unsigned-byte 8)
                                 :direction :output)
@@ -227,7 +228,7 @@
          (cipher (gen-cipher password))
          (res (make-array len :element-type '(unsigned-byte 8))))
     (with-open-file (s file :element-type '(unsigned-byte 8))
-      (read-sequence res s :end ))
+      (read-sequence res s))
     (jonathan:parse (arr-to-str (decrypt-byte-array cipher res)))))
 
 (defun load-db (file password)
@@ -236,7 +237,7 @@
       "bad password")))
 
 ;;;;all below pertains to encryption
-(defparameter *prng* (ironclad:make-prng :fortuna))
+(defvar *prng* (ironclad:make-prng :fortuna))
 (ironclad:read-os-random-seed :random *prng*)
 
 (defun rand-data (len)
@@ -247,7 +248,8 @@
   (ironclad:make-cipher :threefish1024
                         :mode :cfb8
                         :initialization-vector (rand-data 128)
-                        :key (ironclad:ascii-string-to-byte-array (hash-password pass :sha512))))
+                        :key (ironclad:ascii-string-to-byte-array
+                              (hash-password pass :sha512))))
 
 (defun seq-total-len (seqs)
   "returns the total length of all the seqs together"
@@ -257,7 +259,7 @@
 (defun conc-arrs (arrs)
   "concatenate all the arrays within the list arrs and return 1 new array"
   ;;(declare (optimize (speed 3)(safety 1)))
-  (apply #'concatenate 'vector arrs))
+  (apply #'concatenate '(vector (unsigned-byte 8)) arrs))
 
 (defun encrypt-byte-array (cipher byte-array)
   "Takes in a cipher and a byte array and returns a new byte array whose contents has 
